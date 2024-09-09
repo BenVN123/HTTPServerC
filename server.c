@@ -1,3 +1,4 @@
+#include <semaphore.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -11,6 +12,8 @@
 
 const int MAX_THREADS = 4;
 
+sem_t sem_pop;
+
 typedef struct ServerInfo {
     int server_fd;
     struct sockaddr *address;
@@ -21,7 +24,6 @@ void* check_requests(void* arg) {
     ServerInfo *info = (ServerInfo*) arg;
     int new_socket;
     while (1) {
-        sleep(1);
         if ((new_socket = accept(info->server_fd, info->address, info->addrlen)) < 0) {
             perror("error on accept\n");
             exit(EXIT_FAILURE);
@@ -33,8 +35,9 @@ void* check_requests(void* arg) {
 void* worker(void*) {
     int next_socket;
     while (1) {
-        sleep(1);
+        sem_wait(&sem_pop);
         next_socket = pop();
+        sem_post(&sem_pop);
         if (next_socket != -1) {
             handle_connection(next_socket);
             close(next_socket);
@@ -68,6 +71,8 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
+    sem_init(&sem_pop, 0, 1);
+
     pthread_t threads[MAX_THREADS];
     int err;
 
@@ -93,6 +98,7 @@ int main(void) {
         pthread_join(threads[i], NULL);
     }
 
+    sem_destroy(&sem_pop);
     free(info);
 
     return 0; 
